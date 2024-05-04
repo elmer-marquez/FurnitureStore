@@ -1,3 +1,4 @@
+using API.Configurations;
 using DATA;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
@@ -27,6 +28,8 @@ namespace API
             {
                 options.UseSqlite(builder.Configuration.GetConnectionString("DBFStore"));
             });
+
+            builder.Services.Configure<JWTConfig>(builder.Configuration.GetSection("JwtConfig"));
 
             var app = builder.Build();
 
