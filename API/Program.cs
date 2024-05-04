@@ -1,4 +1,7 @@
+using DATA;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -16,6 +19,12 @@ namespace API
             // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
+
+            //me
+            builder.Services.AddDbContext<ApplicationDBContext>((options) =>
+            {
+                options.UseSqlite(builder.Configuration.GetConnectionString("DBFStore"));
+            });
 
             var app = builder.Build();
 
