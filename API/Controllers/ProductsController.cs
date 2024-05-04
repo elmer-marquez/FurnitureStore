@@ -1,9 +1,9 @@
 ﻿using DATA;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SHARED.Models;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace API.Controllers
@@ -34,6 +34,12 @@ namespace API.Controllers
                 return NotFound();
             }
             return Ok(product);
+        }
+
+        [HttpGet("GetByCategory/{cateogoryId:int}")]
+        public async Task<IEnumerable<Product>> GetByCategoryId(int id)
+        {
+            return await _context.Products.Where(p=>p.CategoryId==id).ToListAsync();
         }
 
         [HttpPost]
