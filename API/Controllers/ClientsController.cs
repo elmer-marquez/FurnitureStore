@@ -43,7 +43,7 @@ namespace API.Controllers
             await _context.Clients.AddAsync(client);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(Get), new { id = client.Id }, client);
+            return CreatedAtAction(nameof(GetById), new { id = client.Id }, client);
         }
 
         [HttpPut]

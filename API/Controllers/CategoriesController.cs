@@ -44,7 +44,7 @@ namespace API.Controllers
             _context.Categories.Add(category);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(Create), new {id=category.Id}, category);
+            return CreatedAtAction(nameof(GetById), new {id=category.Id}, category);
         }
 
         [HttpPut]
