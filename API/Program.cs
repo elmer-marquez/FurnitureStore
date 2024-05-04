@@ -21,6 +21,8 @@ namespace API
             builder.Services.AddSwaggerGen();
 
             //me
+            builder.Services.AddRouting((options)=>options.LowercaseUrls = true);
+
             builder.Services.AddDbContext<ApplicationDBContext>((options) =>
             {
                 options.UseSqlite(builder.Configuration.GetConnectionString("DBFStore"));
