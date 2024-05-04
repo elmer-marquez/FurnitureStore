@@ -1,5 +1,6 @@
 ﻿
 using System;
+using System.Collections.Generic;
 
 namespace SHARED.Models
 {
@@ -10,5 +11,6 @@ namespace SHARED.Models
         public int ClientId { get; set; }
         public DateTime OrderDate { get; set; }
         public DateTime DeliveryDate { get; set; }
+        public List<OrderDetail> Details { get; set; }
     }
 }

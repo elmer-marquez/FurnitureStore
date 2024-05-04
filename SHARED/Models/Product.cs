@@ -1,5 +1,7 @@
 ﻿
 
+using System.Collections.Generic;
+
 namespace SHARED.Models
 {
     public class Product
@@ -10,5 +12,7 @@ namespace SHARED.Models
         public decimal Price { get; set; }
         public int Stock { get; set; }
         public int CategoryId { get; set; }
+
+        public List<OrderDetail> OrderDetails { get; set; }
     }
 }
