@@ -29,8 +29,4 @@
     <ProjectReference Include="..\SHARED\SHARED.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="DTOs\Clients\" />
-  </ItemGroup>
-
 </Project>
