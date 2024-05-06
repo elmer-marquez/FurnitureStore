@@ -24,16 +24,19 @@ namespace API.Services
                 message.From.Add(new MailboxAddress(_smtpSettings.SenderName, _smtpSettings.SenderEmail));
                 message.To.Add(new MailboxAddress("", email));
                 message.Subject = subject;
-                message.Body = new TextPart(htmlMessage);
-
-                using(var client = new SmtpClient())
+                message.Body = new TextPart("html")
                 {
-                    await client.ConnectAsync(_smtpSettings.Server, _smtpSettings.Port);
-                    await client.AuthenticateAsync(_smtpSettings.UserName, _smtpSettings.Password);
-                    
-                    await client.SendAsync(message);
+                    Text = htmlMessage
+                };
 
-                    await client.DisconnectAsync(true);
+                using(var smtp = new SmtpClient())
+                {
+                    await smtp.ConnectAsync(_smtpSettings.Server);
+                    await smtp.AuthenticateAsync(_smtpSettings.UserName, _smtpSettings.Password);
+                    
+                    await smtp.SendAsync(message);
+
+                    await smtp.DisconnectAsync(true);
                 }
             }
             catch (System.Exception)

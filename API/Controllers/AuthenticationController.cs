@@ -133,7 +133,7 @@ namespace API.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> ConfirmedEmail(string userId, string code)
+        public async Task<IActionResult> ConfirmEmail([FromQuery] string userId, string code)
         {
             if(string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(code)) 
                 return BadRequest(new AuthResult
@@ -182,13 +182,13 @@ namespace API.Controllers
 
         private async Task SendVerificationEmail(IdentityUser user)
         {
-            var verificationcode = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-            verificationcode = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(verificationcode));
+            var verificationCode = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+            verificationCode = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(verificationCode));
 
             //example: https://localhost:8080/authentication/verifyemail/userId=asdkn&code=laksndf
-            var callbackUrl = $@"{Request.Scheme}://{Request.Host}{Url.Action("ConfirmedEmail", controller: "Authentication", new {userId=user.Id, code=verificationcode})}";
+            var callbackUrl = $@"{Request.Scheme}://{Request.Host}{Url.Action("ConfirmEmail", controller: "Authentication", new {userId = user.Id, code = verificationCode} )}";
 
-            var emailbody = $"Please confirm your account by <a href='{HtmlEncoder.Default.Encode(callbackUrl)}'>Clicking here!</a>";
+            var emailbody = $"<h3>Please confirm your account by <a href='{HtmlEncoder.Default.Encode(callbackUrl)}'>Clicking here!</a></h3>";
 
             await _emailSender.SendEmailAsync(email: user.Email, subject: "Confirm your email", htmlMessage: emailbody );
 
