@@ -1,6 +1,6 @@
 ﻿namespace API.Configurations
 {
-    public class JWTConfig
+    public class JWTSettings
     {
         public string Secret { get; set; }
     }

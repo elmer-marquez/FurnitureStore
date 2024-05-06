@@ -1,7 +1,9 @@
 ﻿using API.Configurations;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using SHARED.DTOs;
@@ -11,6 +13,7 @@ using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Threading.Tasks;
 
 namespace API.Controllers
@@ -20,14 +23,17 @@ namespace API.Controllers
     public class AuthenticationController : ControllerBase
     {
         private readonly UserManager<IdentityUser> _userManager;
-        private readonly JWTConfig _jwtConfig;
+        private readonly JWTSettings _jwtConfig;
+        private readonly IEmailSender _emailSender;
 
         public AuthenticationController(
             UserManager<IdentityUser> userManager, 
-            IOptions<JWTConfig> jwtConfig)
+            IOptions<JWTSettings> jwtConfig,
+            IEmailSender emailSender)
         {
             _userManager = userManager;
             _jwtConfig = jwtConfig.Value;
+            _emailSender = emailSender;
         }
 
         [HttpPost("Register")]
@@ -50,18 +56,20 @@ namespace API.Controllers
             var user = new IdentityUser
             {
                 Email = request.Email,
-                UserName = request.Email
+                UserName = request.Email,
+                EmailConfirmed = false
             };
 
             var isCreated = await _userManager.CreateAsync(user, request.Password);
 
             if (isCreated.Succeeded)
             {
-                var token = GenerateToken(user);
+                await SendVerificationEmail(user);
+
+                //var token = GenerateToken(user);
                 return Ok(new AuthResult
                 {
-                    Result = true,
-                    Token = token
+                    Result = true
                 });
             }
             else
@@ -100,6 +108,13 @@ namespace API.Controllers
                 Errors = new List<string> { "Invalid Paylod" }
             });
 
+            if (!existingUser.EmailConfirmed)
+                return BadRequest(new AuthResult
+                {
+                    Result = false,
+                    Errors = new List<string> { "Email needs to be confirmed."}
+                });
+
             var checkUserAndPass = await _userManager.CheckPasswordAsync(existingUser, request.Password);
 
             if (!checkUserAndPass) return BadRequest(new AuthResult
@@ -115,6 +130,30 @@ namespace API.Controllers
                 Result = true,
                 Token = token,
             });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ConfirmedEmail(string userId, string code)
+        {
+            if(string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(code)) 
+                return BadRequest(new AuthResult
+                {
+                    Result= false,
+                    Errors = new List<string> { "Invalid email confirmation"}
+                });
+
+            var user = await _userManager.FindByIdAsync(userId);
+
+            if (user == null) return NotFound($"Unable to load user with Id '{userId}'.");
+
+            code = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(code));
+
+            var result = await _userManager.ConfirmEmailAsync(user, code);
+
+            var status = result.Succeeded ? "Thank you for confirming your email."
+                                            : "There has been an error confirming email.";
+
+            return Ok(status);
         }
 
         private string GenerateToken(IdentityUser user)
@@ -140,5 +179,21 @@ namespace API.Controllers
 
             return jwtTokenHandler.WriteToken(token);
         }
+
+        private async Task SendVerificationEmail(IdentityUser user)
+        {
+            var verificationcode = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+            verificationcode = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(verificationcode));
+
+            //example: https://localhost:8080/authentication/verifyemail/userId=asdkn&code=laksndf
+            var callbackUrl = $@"{Request.Scheme}://{Request.Host}{Url.Action("ConfirmedEmail", controller: "Authentication", new {userId=user.Id, code=verificationcode})}";
+
+            var emailbody = $"Please confirm your account by <a href='{HtmlEncoder.Default.Encode(callbackUrl)}'>Clicking here!</a>";
+
+            await _emailSender.SendEmailAsync(email: user.Email, subject: "Confirm your email", htmlMessage: emailbody );
+
+        }
+
+
     }
 }

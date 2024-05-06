@@ -1,8 +1,10 @@
 using API.Configurations;
+using API.Services;
 using DATA;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -38,7 +40,7 @@ namespace API
                     Type = SecuritySchemeType.ApiKey,
                     Scheme = "Bearer",
                     BearerFormat = "JWT",
-                    In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+                    In = ParameterLocation.Header,
                     Description = $@"JWT Authorization header using the Bearer scheme. \r\n
                                      \r\n Enter Prfeix (Bearer), space, and token. 
                                     Example: Bearer ;oasdonl,r-aknlds"
@@ -68,7 +70,12 @@ namespace API
                 options.UseSqlite(builder.Configuration.GetConnectionString("DBFStore"));
             });
 
-            builder.Services.Configure<JWTConfig>(builder.Configuration.GetSection("JwtConfig"));
+            builder.Services.Configure<JWTSettings>(builder.Configuration.GetSection("JwtConfig"));
+
+            //Email -----------------------------------------
+            //-----------------------------------------------
+            builder.Services.Configure<SMTPSettings>(builder.Configuration.GetSection("SMTPSettings"));
+            builder.Services.AddSingleton<IEmailSender, EmailService>();
 
             builder.Services.AddAuthentication(options =>
             {
