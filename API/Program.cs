@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -77,6 +78,17 @@ namespace API
             builder.Services.Configure<SMTPSettings>(builder.Configuration.GetSection("SMTPSettings"));
             builder.Services.AddSingleton<IEmailSender, EmailService>();
 
+            var key = Encoding.ASCII.GetBytes(builder.Configuration.GetSection("JwtConfig:Secret").Value);
+            var tokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(key),
+                ValidateIssuer = false, //esto en produccion debe activarse a true
+                ValidateAudience = false, // si un token lo utiliza una web no lo podran usar en otro lado
+                RequireExpirationTime = false,
+                ValidateLifetime = true
+            };
+
             builder.Services.AddAuthentication(options =>
             {
                 options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -84,18 +96,9 @@ namespace API
                 options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
             }).AddJwtBearer(options =>
             {
-                var key = Encoding.ASCII.GetBytes(builder.Configuration.GetSection("JwtConfig:Secret").Value);
 
                 options.SaveToken = true;
-                options.TokenValidationParameters = new TokenValidationParameters
-                {
-                    ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(key),
-                    ValidateIssuer = false, //esto en produccion debe activarse a true
-                    ValidateAudience = false, // si un token lo utiliza una web no lo podran usar en otro lado
-                    RequireExpirationTime = false,
-                    ValidateLifetime = true
-                };
+                options.TokenValidationParameters = tokenValidationParameters;
             });
 
             builder.Services.AddDefaultIdentity<IdentityUser>(options =>
@@ -105,6 +108,9 @@ namespace API
                 options.SignIn.RequireConfirmedPhoneNumber = false;
 
             }).AddEntityFrameworkStores<ApplicationDBContext>();
+
+            builder.Services.AddSingleton(tokenValidationParameters);
+
 
             var app = builder.Build();
 

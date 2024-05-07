@@ -1,4 +1,5 @@
 ﻿using API.Configurations;
+using DATA;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
@@ -6,7 +7,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using SHARED.Common;
 using SHARED.DTOs;
+using SHARED.Models;
 using SHARED.Models.Auth;
 using System;
 using System.Collections.Generic;
@@ -25,15 +28,18 @@ namespace API.Controllers
         private readonly UserManager<IdentityUser> _userManager;
         private readonly JWTSettings _jwtConfig;
         private readonly IEmailSender _emailSender;
+        private readonly ApplicationDBContext _context;
 
         public AuthenticationController(
             UserManager<IdentityUser> userManager, 
             IOptions<JWTSettings> jwtConfig,
-            IEmailSender emailSender)
+            IEmailSender emailSender,
+            ApplicationDBContext context)
         {
             _userManager = userManager;
             _jwtConfig = jwtConfig.Value;
             _emailSender = emailSender;
+            _context = context;
         }
 
         [HttpPost("Register")]
@@ -123,13 +129,9 @@ namespace API.Controllers
                 Errors = new List<string> { "Invalid Credentials" }
             });
 
-            var token = GenerateToken(existingUser);
+            var token = await GenerateToken(existingUser);
 
-            return Ok(new AuthResult
-            {
-                Result = true,
-                Token = token,
-            });
+            return Ok(token);
         }
 
         [HttpGet]
@@ -156,7 +158,7 @@ namespace API.Controllers
             return Ok(status);
         }
 
-        private string GenerateToken(IdentityUser user)
+        private async Task<AuthResult> GenerateToken(IdentityUser user)
         {
             var jwtTokenHandler = new JwtSecurityTokenHandler();
             var key = Encoding.UTF8.GetBytes(_jwtConfig.Secret);
@@ -171,13 +173,32 @@ namespace API.Controllers
                     new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
                     new Claim(JwtRegisteredClaimNames.Iat, DateTime.Now.ToUniversalTime().ToString())
                 })),
-                Expires = DateTime.UtcNow.AddHours(1),
+                Expires = DateTime.UtcNow.Add(_jwtConfig.ExpiryTime),
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256)
             };
 
             var token = jwtTokenHandler.CreateToken(tokenDescriptor);
 
-            return jwtTokenHandler.WriteToken(token);
+            var jwtToken = jwtTokenHandler.WriteToken(token);
+            var refreshToken = new RefreshToken
+            {
+                JwtId = token.Id,
+                Token = RandomString.Generate(23),
+                AddedDate = DateTime.UtcNow,
+                ExpiryTime = DateTime.UtcNow.AddDays(30),
+                IsRevoked = false,
+                UserId = user.Id
+            };
+
+            await _context.RefreshTokens.AddAsync(refreshToken);
+            await _context.SaveChangesAsync();
+
+            return new AuthResult
+            {
+                Token = jwtToken,
+                RefreshToken = refreshToken.Token,
+                Result = true
+            };
         }
 
         private async Task SendVerificationEmail(IdentityUser user)
