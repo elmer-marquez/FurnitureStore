@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using SHARED.Common;
@@ -32,25 +33,29 @@ namespace API.Controllers
         private readonly IEmailSender _emailSender;
         private readonly ApplicationDBContext _context;
         private readonly TokenValidationParameters _tokenValidationParameters;
+        private readonly ILogger<AuthenticationController> _logger;
 
         public AuthenticationController(
             UserManager<IdentityUser> userManager, 
             IOptions<JWTSettings> jwtConfig,
             IEmailSender emailSender,
             ApplicationDBContext context,
-            TokenValidationParameters tokenValidationParameters)
+            TokenValidationParameters tokenValidationParameters, 
+            ILogger<AuthenticationController> logger)
         {
             _userManager = userManager;
             _jwtConfig = jwtConfig.Value;
             _emailSender = emailSender;
             _context = context;
             _tokenValidationParameters = tokenValidationParameters;
-
+            _logger = logger;
         }
 
         [HttpPost("Register")]
         public async Task<IActionResult> Register([FromBody] UserRegistrationRequestDto request)
         {
+            _logger.LogWarning("A user is trying to register");
+
             if(!ModelState.IsValid) return BadRequest();
 
             //verify if email exists
