@@ -135,7 +135,7 @@ namespace API.Controllers
                 Errors = new List<string> { "Invalid Credentials" }
             });
 
-            var token = await GenerateToken(existingUser);
+            var token = await GenerateTokenAsync(existingUser);
 
             return Ok(token);
 
@@ -248,6 +248,7 @@ namespace API.Controllers
         private async Task<AuthResult> VerifyAndGenerateTokenAsync(TokenRequest request)
         {
             var jwtTokenHandler = new JwtSecurityTokenHandler();
+            AuthResult authResult = null;
 
             try
             {
@@ -267,7 +268,7 @@ namespace API.Controllers
 
                     var expiryDate = DateTimeOffset.FromUnixTimeSeconds(utcExpiryTime).UtcDateTime;
 
-                    if (expiryDate > DateTime.UtcNow) throw new Exception("Invalid Token");
+                    if (expiryDate < DateTime.UtcNow) throw new Exception("Token Expired");
 
                     var storedToken = await _context.RefreshTokens.FirstOrDefaultAsync(t=>t.Token == request.RefreshToken);
 
@@ -288,17 +289,19 @@ namespace API.Controllers
 
                     var dbUser = await _userManager.FindByIdAsync(storedToken.UserId);
 
-                    return await GenerateTokenAsync(dbUser);
+                    authResult = await GenerateTokenAsync(dbUser);
                 }
             }
             catch (Exception e)
             {
                 var message = e.Message == "Invalid Token" || e.Message == "Token Expired" ? e.Message : "Internal Server Error";
-                return new AuthResult { 
+                authResult = new AuthResult { 
                     Result = false,
                     Errors = new List<string>() { message } 
                 };
             }
+
+            return authResult;
         }
     }
 }
