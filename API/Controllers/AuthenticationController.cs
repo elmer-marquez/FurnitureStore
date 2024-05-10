@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using SHARED.Common;
@@ -14,6 +15,7 @@ using SHARED.Models.Auth;
 using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
+using System.Linq;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Encodings.Web;
@@ -29,17 +31,21 @@ namespace API.Controllers
         private readonly JWTSettings _jwtConfig;
         private readonly IEmailSender _emailSender;
         private readonly ApplicationDBContext _context;
+        private readonly TokenValidationParameters _tokenValidationParameters;
 
         public AuthenticationController(
             UserManager<IdentityUser> userManager, 
             IOptions<JWTSettings> jwtConfig,
             IEmailSender emailSender,
-            ApplicationDBContext context)
+            ApplicationDBContext context,
+            TokenValidationParameters tokenValidationParameters)
         {
             _userManager = userManager;
             _jwtConfig = jwtConfig.Value;
             _emailSender = emailSender;
             _context = context;
+            _tokenValidationParameters = tokenValidationParameters;
+
         }
 
         [HttpPost("Register")]
@@ -132,6 +138,30 @@ namespace API.Controllers
             var token = await GenerateToken(existingUser);
 
             return Ok(token);
+
+        }
+
+        [HttpPost("RefreshToken")]
+        public async Task<IActionResult> RefreshToken([FromBody] TokenRequest request)
+        {
+            if(!ModelState.IsValid) return BadRequest(new AuthResult
+            {
+                Result= false,
+                Errors = new List<string> { "Invalid Parameters"}
+            });
+
+            var results = VerifyAndGenerateTokenAsync(request);
+
+            if(results == null)
+            {
+                return BadRequest(new AuthResult
+                {
+                    Result = false,
+                    Errors = new List<string> { "Invalid Token" }
+                });
+            }
+
+            return Ok(results);
         }
 
         [HttpGet]
@@ -158,7 +188,7 @@ namespace API.Controllers
             return Ok(status);
         }
 
-        private async Task<AuthResult> GenerateToken(IdentityUser user)
+        private async Task<AuthResult> GenerateTokenAsync(IdentityUser user)
         {
             var jwtTokenHandler = new JwtSecurityTokenHandler();
             var key = Encoding.UTF8.GetBytes(_jwtConfig.Secret);
@@ -215,6 +245,60 @@ namespace API.Controllers
 
         }
 
+        private async Task<AuthResult> VerifyAndGenerateTokenAsync(TokenRequest request)
+        {
+            var jwtTokenHandler = new JwtSecurityTokenHandler();
 
+            try
+            {
+                _tokenValidationParameters.ValidateLifetime = false;
+
+                var tokenBeingVerified = jwtTokenHandler.ValidateToken(request.Token, _tokenValidationParameters, out var validatedToken);
+                if (validatedToken is JwtSecurityToken jwtSecurityToken)
+                {
+                    var result = jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase);
+
+                    if(!result || tokenBeingVerified == null)
+                    {
+                        throw new Exception("Invalid Token");
+                    }
+
+                    var utcExpiryTime = long.Parse(tokenBeingVerified.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Exp).Value);
+
+                    var expiryDate = DateTimeOffset.FromUnixTimeSeconds(utcExpiryTime).UtcDateTime;
+
+                    if (expiryDate > DateTime.UtcNow) throw new Exception("Invalid Token");
+
+                    var storedToken = await _context.RefreshTokens.FirstOrDefaultAsync(t=>t.Token == request.RefreshToken);
+
+                    if (storedToken == null) throw new Exception("Invalid Token");
+
+                    if (storedToken.IsUsed || storedToken.IsRevoked) throw new Exception("Invalid Token");
+
+                    var jti = tokenBeingVerified.Claims.FirstOrDefault(c=>c.Type == JwtRegisteredClaimNames.Jti).Value;
+
+                    if (jti != storedToken.JwtId) throw new Exception("Invalid Token");
+
+                    if(storedToken.ExpiryTime < DateTime.UtcNow) throw new Exception("Invalid Exception");
+
+                    storedToken.IsUsed = true;
+
+                    _context.RefreshTokens.Update(storedToken);
+                    await _context.SaveChangesAsync();
+
+                    var dbUser = await _userManager.FindByIdAsync(storedToken.UserId);
+
+                    return await GenerateTokenAsync(dbUser);
+                }
+            }
+            catch (Exception e)
+            {
+                var message = e.Message == "Invalid Token" || e.Message == "Token Expired" ? e.Message : "Internal Server Error";
+                return new AuthResult { 
+                    Result = false,
+                    Errors = new List<string>() { message } 
+                };
+            }
+        }
     }
 }
